@@ -123,7 +123,7 @@ Tips for **Run program**:
 | Setting | Range / default | Description |
 |---|---|---|
 | **Flash length (ms)** | 200–10000 / 1500 | Total time of the flash effect. The first half is 3 strobe pulses; the second half is a gradual fade-out. The flash covers every monitor and is click-through. |
-| **Log file** | path | File that Log actions append to. Missing folders are created. |
+| **Log file** | path | File that Log actions append to. Missing folders are created. **Edit** opens it in Notepad (creating an empty file first if it doesn't exist yet); it also works while watching. |
 
 Log lines look like:
 
@@ -138,6 +138,7 @@ Log lines look like:
 | Control | Description |
 |---|---|
 | **Start / Stop watching** | Starts or stops the polling loop. Starting requires a region and at least one phrase. While watching, the settings are locked. |
+| **Start watching when the app opens** | When ticked, polling starts automatically as soon as the window appears, using the saved region and phrases. If there is no region or no phrase, auto-start is skipped and the status line says why. Locked while watching. |
 | **Save settings** | Writes `config.json` now. Settings are also saved when you press Start, after selecting a region, and when you close the window while not watching. |
 | **Status line** | Shows the latest event: triggers, errors, saves. |
 | **Last OCR result** | The raw text from the most recent pass - useful for choosing phrases and checking how well the region reads. |
@@ -162,6 +163,7 @@ missing or invalid, defaults are used.
 
 ```json
 {
+  "StartWatchingOnStartup": false,
   "HasRegion": true,
   "RegionX": 5, "RegionY": 62, "RegionWidth": 475, "RegionHeight": 340,
   "PollIntervalMs": 1000,
@@ -183,6 +185,7 @@ missing or invalid, defaults are used.
 
 | Key | Meaning |
 |---|---|
+| `StartWatchingOnStartup` | `true` to start polling automatically when the app opens. |
 | `HasRegion`, `RegionX/Y/Width/Height` | Capture rectangle in screen pixels (virtual-desktop coordinates). |
 | `PollIntervalMs` | See 4.2. Clamped to 100–60000. |
 | `RearmAfterAbsentPolls` | See 4.2. Clamped to 1–1000. |

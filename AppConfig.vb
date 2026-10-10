@@ -17,6 +17,7 @@ End Class
 ''' <summary>All persisted settings. Stored as config.json next to the executable.</summary>
 Public Class AppConfig
 
+    Public Property StartWatchingOnStartup As Boolean = False
     Public Property HasRegion As Boolean = False
     Public Property RegionX As Integer
     Public Property RegionY As Integer

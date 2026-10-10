@@ -19,6 +19,7 @@ Public Class MainForm
     Private grid As DataGridView
     Private btnColor As Button
     Private nudFlashMs As NumericUpDown
+    Private chkAutoStart As CheckBox
     Private grpDetail As GroupBox
     Private _loadingDetail As Boolean
     Private txtSound As TextBox
@@ -126,10 +127,11 @@ Public Class MainForm
         nudFlashMs = AddNud(gAct, 140, 24, 70, 200, 10000)
         _editable.Add(nudFlashMs)
 
-        AddLabel(gAct, "Log file:", 400, 26, 60)
-        txtLog = AddText(gAct, 462, 24, 160)
-        AddButton(gAct, "...", 628, 22, 36, Sub(s, e) BrowseSave(txtLog, "Text / log|*.txt;*.log|All files|*.*"))
-        AddButton(gAct, "Test", 670, 22, 56, Sub(s, e) TestAction(Sub() ActionRunner.WriteLog(txtLog.Text, "(test)", "Test entry from MessageTrigger")))
+        AddLabel(gAct, "Log file:", 235, 26, 55)
+        txtLog = AddText(gAct, 292, 24, 190)
+        AddButton(gAct, "...", 488, 22, 36, Sub(s, e) BrowseSave(txtLog, "Text / log|*.txt;*.log|All files|*.*"))
+        AddButton(gAct, "Test", 530, 22, 56, Sub(s, e) TestAction(Sub() ActionRunner.WriteLog(txtLog.Text, "(test)", "Test entry from MessageTrigger")))
+        AddButton(gAct, "Edit", 592, 22, 56, AddressOf OnEditLog)
         _editable.Add(txtLog)
 
         ' --- Control row ---
@@ -137,14 +139,17 @@ Public Class MainForm
         btnStart.Height = 34
         Dim btnSave = AddButton(Me, "Save settings", 170, 514, 120, Sub(s, e) SaveConfig(showStatus:=True))
         btnSave.Height = 34
-        lblStatus = AddLabel(Me, "", 305, 523, 440)
+        chkAutoStart = New CheckBox With {.Text = "Start watching when the app opens", .Left = 305, .Top = 521, .Width = 270, .Height = 22}
+        Controls.Add(chkAutoStart)
+        _editable.Add(chkAutoStart)
+        lblStatus = AddLabel(Me, "", 20, 553, 725)
         lblStatus.AutoEllipsis = True
 
         ' --- Last OCR output ---
-        Dim gOcr = AddGroup("Last OCR result", 558, 130)
+        Dim gOcr = AddGroup("Last OCR result", 576, 112)
         txtOcr = New TextBox With {
             .Multiline = True, .ReadOnly = True, .ScrollBars = ScrollBars.Vertical,
-            .Left = 12, .Top = 22, .Width = 712, .Height = 98
+            .Left = 12, .Top = 22, .Width = 712, .Height = 80
         }
         gOcr.Controls.Add(txtOcr)
     End Sub
@@ -190,6 +195,7 @@ Public Class MainForm
         nudUpscale.Value = _cfg.UpscaleFactor
         nudFlashMs.Value = _cfg.FlashDurationMs
         txtLog.Text = _cfg.LogFile
+        chkAutoStart.Checked = _cfg.StartWatchingOnStartup
 
         grid.Rows.Clear()
         For Each r In _cfg.Phrases
@@ -250,6 +256,7 @@ Public Class MainForm
         _cfg.UpscaleFactor = CInt(nudUpscale.Value)
         _cfg.FlashDurationMs = CInt(nudFlashMs.Value)
         _cfg.LogFile = txtLog.Text.Trim()
+        _cfg.StartWatchingOnStartup = chkAutoStart.Checked
 
         _cfg.Phrases = New List(Of PhraseRule)()
         For Each row As DataGridViewRow In grid.Rows
@@ -332,13 +339,24 @@ Public Class MainForm
             Return
         End If
 
+        StartWatching(interactive:=True)
+    End Sub
+
+    ' Validates and starts polling. When not interactive (auto-start) problems go to the status line, not a dialog.
+    Private Sub StartWatching(interactive As Boolean)
         ReadUiToConfig()
+        Dim problem As String = Nothing
         If Not _cfg.HasRegion Then
-            MessageBox.Show(Me, "Select a capture region first.", "MessageTrigger", MessageBoxButtons.OK, MessageBoxIcon.Information)
-            Return
+            problem = "Select a capture region first."
+        ElseIf _cfg.Phrases.Count = 0 Then
+            problem = "Add at least one phrase first."
         End If
-        If _cfg.Phrases.Count = 0 Then
-            MessageBox.Show(Me, "Add at least one phrase first.", "MessageTrigger", MessageBoxButtons.OK, MessageBoxIcon.Information)
+        If problem IsNot Nothing Then
+            If interactive Then
+                MessageBox.Show(Me, problem, "MessageTrigger", MessageBoxButtons.OK, MessageBoxIcon.Information)
+            Else
+                SetStatus("Auto-start skipped: " & problem)
+            End If
             Return
         End If
 
@@ -362,6 +380,29 @@ Public Class MainForm
     Private Sub OnTriggered(rule As PhraseRule, context As String)
         SetStatus($"Triggered '{rule.Phrase}'")
         ActionRunner.Execute(_cfg, rule, context, Sub(msg) SetStatus(msg))
+    End Sub
+
+    Protected Overrides Sub OnShown(e As EventArgs)
+        MyBase.OnShown(e)
+        If _cfg.StartWatchingOnStartup Then StartWatching(interactive:=False)
+    End Sub
+
+    Private Sub OnEditLog(sender As Object, e As EventArgs)
+        Dim logPath As String = txtLog.Text.Trim()
+        If logPath.Length = 0 Then
+            SetStatus("No log file configured.")
+            Return
+        End If
+        Try
+            Dim full As String = Path.GetFullPath(logPath)
+            Dim dir As String = Path.GetDirectoryName(full)
+            If Not String.IsNullOrEmpty(dir) Then Directory.CreateDirectory(dir)
+            If Not File.Exists(full) Then File.WriteAllText(full, "")
+            Using Process.Start(New ProcessStartInfo("notepad.exe", ControlChars.Quote & full & ControlChars.Quote) With {.UseShellExecute = False})
+            End Using
+        Catch ex As Exception
+            SetStatus("Could not open log in Notepad: " & ex.Message)
+        End Try
     End Sub
 
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
