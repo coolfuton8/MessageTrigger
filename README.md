@@ -7,6 +7,8 @@ line such as `[Event] The Alpha Giant Crocodile ...` shows up.
 OCR uses the **built-in Windows OCR engine** (`Windows.Media.Ocr`), so there is nothing extra to install
 beyond an OCR-capable language pack (any normal Windows 10/11 install has one for your display language).
 
+> Full build, run and configuration details: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+
 ## Usage
 
 1. `dotnet run` (or build and start `MessageTrigger.exe`). Requires the .NET 8 SDK/runtime on Windows 10 1809+.
