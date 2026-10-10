@@ -8,6 +8,7 @@ Public Class PhraseRule
     Public Property Sound As Boolean = True
     Public Property Log As Boolean = True
     Public Property Run As Boolean = False
+    Public Property FlashColor As String = "#FF0000"
     Public Property SoundFile As String = ""
     Public Property CommandPath As String = ""
     Public Property CommandArgs As String = ""
@@ -26,7 +27,6 @@ Public Class AppConfig
     Public Property RearmAfterAbsentPolls As Integer = 10
     Public Property UpscaleFactor As Integer = 2
 
-    Public Property FlashColor As String = "#FF0000"
     Public Property FlashDurationMs As Integer = 400
 
     Public Property LogFile As String = ""
@@ -84,6 +84,7 @@ Public Class AppConfig
         Phrases.RemoveAll(Function(p) p Is Nothing)
         For Each p In Phrases
             If p.Phrase Is Nothing Then p.Phrase = ""
+            If p.FlashColor Is Nothing Then p.FlashColor = "#FF0000"
             If p.SoundFile Is Nothing Then p.SoundFile = ""
             If p.CommandPath Is Nothing Then p.CommandPath = ""
             If p.CommandArgs Is Nothing Then p.CommandArgs = ""

@@ -36,7 +36,7 @@ Public Class MainForm
         MaximizeBox = False
         StartPosition = FormStartPosition.CenterScreen
         AutoScaleMode = AutoScaleMode.Dpi
-        ClientSize = New Size(760, 700)
+        ClientSize = New Size(760, 728)
 
         BuildUi()
 
@@ -73,7 +73,7 @@ Public Class MainForm
         _editable.AddRange({nudInterval, nudRearm, nudUpscale})
 
         ' --- Phrases ---
-        Dim gPhr = AddGroup("Phrases to look for (case / spacing / punctuation are ignored)", 128, 262)
+        Dim gPhr = AddGroup("Phrases to look for (case / spacing / punctuation are ignored)", 128, 290)
         grid = New DataGridView With {
             .Left = 12, .Top = 22, .Width = 712, .Height = 108,
             .AllowUserToResizeRows = False,
@@ -98,7 +98,7 @@ Public Class MainForm
         _editable.Add(grid)
 
         ' Per-phrase sound / program, edited for the selected row.
-        grpDetail = New GroupBox With {.Text = "Sound and program for the selected phrase", .Left = 12, .Top = 156, .Width = 712, .Height = 98}
+        grpDetail = New GroupBox With {.Text = "Settings for the selected phrase", .Left = 12, .Top = 156, .Width = 712, .Height = 126}
         gPhr.Controls.Add(grpDetail)
         AddLabel(grpDetail, "Sound file:", 12, 24, 90)
         txtSound = AddText(grpDetail, 105, 22, 430)
@@ -111,6 +111,9 @@ Public Class MainForm
         AddLabel(grpDetail, "Arguments:", 12, 76, 90)
         txtArgs = AddText(grpDetail, 105, 74, 430)
         AddLabel(grpDetail, "{phrase} and {time} are substituted", 545, 77, 165)
+        AddLabel(grpDetail, "Flash colour:", 12, 104, 90)
+        btnColor = AddButton(grpDetail, "", 105, 100, 60, AddressOf OnPickColor)
+        AddButton(grpDetail, "Test flash", 175, 100, 90, Sub(s, e) FlashOverlay.Flash(btnColor.BackColor, CInt(nudFlashMs.Value)))
         For Each tb In {txtSound, txtCommand, txtArgs}
             AddHandler tb.TextChanged, Sub(s As Object, e As EventArgs) StoreDetailToSelection()
         Next
@@ -118,13 +121,10 @@ Public Class MainForm
         _editable.Add(grpDetail)
 
         ' --- Actions ---
-        Dim gAct = AddGroup("Flash and log (shared by all phrases)", 396, 62)
-        AddLabel(gAct, "Flash colour:", 12, 26, 90)
-        btnColor = AddButton(gAct, "", 105, 22, 60, AddressOf OnPickColor)
-        AddLabel(gAct, "Duration (ms):", 190, 26, 100)
-        nudFlashMs = AddNud(gAct, 295, 24, 70, 50, 5000)
-        AddButton(gAct, "Test flash", 385, 22, 100, Sub(s, e) FlashOverlay.Flash(btnColor.BackColor, CInt(nudFlashMs.Value)))
-        _editable.AddRange({btnColor, nudFlashMs})
+        Dim gAct = AddGroup("Flash duration and log file (shared by all phrases)", 424, 62)
+        AddLabel(gAct, "Flash duration (ms):", 12, 26, 125)
+        nudFlashMs = AddNud(gAct, 140, 24, 70, 50, 5000)
+        _editable.Add(nudFlashMs)
 
         AddLabel(gAct, "Log file:", 400, 26, 60)
         txtLog = AddText(gAct, 462, 24, 160)
@@ -133,15 +133,15 @@ Public Class MainForm
         _editable.Add(txtLog)
 
         ' --- Control row ---
-        btnStart = AddButton(Me, "Start watching", 20, 470, 140, AddressOf OnStartStop)
+        btnStart = AddButton(Me, "Start watching", 20, 498, 140, AddressOf OnStartStop)
         btnStart.Height = 34
-        Dim btnSave = AddButton(Me, "Save settings", 170, 470, 120, Sub(s, e) SaveConfig(showStatus:=True))
+        Dim btnSave = AddButton(Me, "Save settings", 170, 498, 120, Sub(s, e) SaveConfig(showStatus:=True))
         btnSave.Height = 34
-        lblStatus = AddLabel(Me, "", 305, 479, 440)
+        lblStatus = AddLabel(Me, "", 305, 507, 440)
         lblStatus.AutoEllipsis = True
 
         ' --- Last OCR output ---
-        Dim gOcr = AddGroup("Last OCR result", 514, 172)
+        Dim gOcr = AddGroup("Last OCR result", 542, 172)
         txtOcr = New TextBox With {
             .Multiline = True, .ReadOnly = True, .ScrollBars = ScrollBars.Vertical,
             .Left = 12, .Top = 22, .Width = 712, .Height = 140
@@ -188,14 +188,13 @@ Public Class MainForm
         nudInterval.Value = _cfg.PollIntervalMs
         nudRearm.Value = _cfg.RearmAfterAbsentPolls
         nudUpscale.Value = _cfg.UpscaleFactor
-        btnColor.BackColor = ActionRunner.ParseColor(_cfg.FlashColor)
         nudFlashMs.Value = _cfg.FlashDurationMs
         txtLog.Text = _cfg.LogFile
 
         grid.Rows.Clear()
         For Each r In _cfg.Phrases
             Dim idx As Integer = grid.Rows.Add(r.Phrase, r.Flash, r.Sound, r.Log, r.Run)
-            grid.Rows(idx).Tag = New PhraseRule With {.SoundFile = r.SoundFile, .CommandPath = r.CommandPath, .CommandArgs = r.CommandArgs}
+            grid.Rows(idx).Tag = New PhraseRule With {.SoundFile = r.SoundFile, .CommandPath = r.CommandPath, .CommandArgs = r.CommandArgs, .FlashColor = r.FlashColor}
         Next
         LoadDetailFromSelection()
     End Sub
@@ -219,12 +218,14 @@ Public Class MainForm
                 txtSound.Text = ""
                 txtCommand.Text = ""
                 txtArgs.Text = ""
+                btnColor.BackColor = Color.Red
             Else
                 Dim d = DetailOf(row)
                 grpDetail.Enabled = Not _watcher.IsRunning
                 txtSound.Text = d.SoundFile
                 txtCommand.Text = d.CommandPath
                 txtArgs.Text = d.CommandArgs
+                btnColor.BackColor = ActionRunner.ParseColor(d.FlashColor)
             End If
         Finally
             _loadingDetail = False
@@ -239,6 +240,7 @@ Public Class MainForm
         d.SoundFile = txtSound.Text.Trim()
         d.CommandPath = txtCommand.Text.Trim()
         d.CommandArgs = txtArgs.Text
+        d.FlashColor = ColorTranslator.ToHtml(btnColor.BackColor)
     End Sub
 
     Private Sub ReadUiToConfig()
@@ -246,7 +248,6 @@ Public Class MainForm
         _cfg.PollIntervalMs = CInt(nudInterval.Value)
         _cfg.RearmAfterAbsentPolls = CInt(nudRearm.Value)
         _cfg.UpscaleFactor = CInt(nudUpscale.Value)
-        _cfg.FlashColor = ColorTranslator.ToHtml(btnColor.BackColor)
         _cfg.FlashDurationMs = CInt(nudFlashMs.Value)
         _cfg.LogFile = txtLog.Text.Trim()
 
@@ -264,7 +265,8 @@ Public Class MainForm
                 .Run = CellChecked(row, 4),
                 .SoundFile = d.SoundFile,
                 .CommandPath = d.CommandPath,
-                .CommandArgs = d.CommandArgs
+                .CommandArgs = d.CommandArgs,
+                .FlashColor = d.FlashColor
             })
         Next
     End Sub
@@ -317,7 +319,10 @@ Public Class MainForm
 
     Private Sub OnPickColor(sender As Object, e As EventArgs)
         Using dlg As New ColorDialog With {.Color = btnColor.BackColor}
-            If dlg.ShowDialog(Me) = DialogResult.OK Then btnColor.BackColor = dlg.Color
+            If dlg.ShowDialog(Me) = DialogResult.OK Then
+                btnColor.BackColor = dlg.Color
+                StoreDetailToSelection()
+            End If
         End Using
     End Sub
 

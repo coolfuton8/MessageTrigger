@@ -10,7 +10,7 @@ Public Class ActionRunner
 
     Public Shared Sub Execute(cfg As AppConfig, rule As PhraseRule, context As String, reportError As Action(Of String))
         If rule.Flash Then
-            Attempt("Flash", reportError, Sub() FlashOverlay.Flash(ParseColor(cfg.FlashColor), cfg.FlashDurationMs))
+            Attempt("Flash", reportError, Sub() FlashOverlay.Flash(ParseColor(rule.FlashColor), cfg.FlashDurationMs))
         End If
         If rule.Sound Then
             Attempt("Sound", reportError, Sub() PlaySound(rule.SoundFile))
