@@ -54,7 +54,7 @@ Copy the resulting `publish` folder anywhere; run `MessageTrigger.exe` from it. 
 To rebuild it, install Inno Setup 6 (`winget install JRSoftware.InnoSetup`) and run:
 
 ```bash
-powershell -File installeruild-installer.ps1
+powershell -File installer\build-installer.ps1
 ```
 
 ### Visual Studio

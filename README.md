@@ -17,7 +17,7 @@ entry (optional desktop shortcut) and an uninstaller. The build is self-containe
 runtime is required. Your `config.json` is kept on uninstall.
 
 To rebuild the installer, install [Inno Setup 6](https://jrsoftware.org/isinfo.php)
-(`winget install JRSoftware.InnoSetup`) and run `installeruild-installer.ps1`.
+(`winget install JRSoftware.InnoSetup`) and run `installer\build-installer.ps1`.
 
 ## Usage
 
