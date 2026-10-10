@@ -66,21 +66,40 @@ End Class
 Public Class FlashOverlay
     Inherits ClickThroughForm
 
+    ' First half of the duration: 3 strobe pulses. Second half: gradual fade-out.
+    Private Const StrobeCount As Integer = 3
+    Private Const PeakOpacity As Double = 0.6
+
     Private ReadOnly _timer As New System.Windows.Forms.Timer()
+    Private ReadOnly _clock As New Stopwatch()
+    Private ReadOnly _durationMs As Double
 
     Private Sub New(bounds As Rectangle, color As Color, durationMs As Integer)
         Me.Bounds = bounds
         BackColor = color
-        Opacity = 0.5
-        _timer.Interval = Math.Max(50, durationMs)
-        AddHandler _timer.Tick, Sub()
-                                    _timer.Stop()
-                                    Close()
-                                End Sub
+        Opacity = PeakOpacity
+        _durationMs = Math.Max(200, durationMs)
+        _timer.Interval = 16
+        AddHandler _timer.Tick, AddressOf OnTick
+    End Sub
+
+    Private Sub OnTick(sender As Object, e As EventArgs)
+        Dim t As Double = _clock.ElapsedMilliseconds / _durationMs
+        If t >= 1.0 Then
+            _timer.Stop()
+            Close()
+        ElseIf t < 0.5 Then
+            Dim cycle As Double = (t / 0.5 * StrobeCount) Mod 1.0
+            Opacity = If(cycle < 0.5, PeakOpacity, 0.0)
+        Else
+            Dim f As Double = (t - 0.5) / 0.5
+            Opacity = PeakOpacity * (1.0 - f) * (1.0 - f) ' eased so the tail lingers softly
+        End If
     End Sub
 
     Protected Overrides Sub OnShown(e As EventArgs)
         MyBase.OnShown(e)
+        _clock.Start()
         _timer.Start()
     End Sub
 

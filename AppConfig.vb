@@ -27,7 +27,7 @@ Public Class AppConfig
     Public Property RearmAfterAbsentPolls As Integer = 10
     Public Property UpscaleFactor As Integer = 2
 
-    Public Property FlashDurationMs As Integer = 400
+    Public Property FlashDurationMs As Integer = 1500
 
     Public Property LogFile As String = ""
 
@@ -77,7 +77,7 @@ Public Class AppConfig
         PollIntervalMs = Math.Clamp(PollIntervalMs, 100, 60000)
         RearmAfterAbsentPolls = Math.Clamp(RearmAfterAbsentPolls, 1, 1000)
         UpscaleFactor = Math.Clamp(UpscaleFactor, 1, 4)
-        FlashDurationMs = Math.Clamp(FlashDurationMs, 50, 5000)
+        FlashDurationMs = Math.Clamp(FlashDurationMs, 200, 10000)
         If RegionWidth < 1 OrElse RegionHeight < 1 Then HasRegion = False
         If Phrases Is Nothing Then Phrases = New List(Of PhraseRule)()
         If LogFile Is Nothing Then LogFile = ""

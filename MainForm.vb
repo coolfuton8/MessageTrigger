@@ -121,9 +121,9 @@ Public Class MainForm
         _editable.Add(grpDetail)
 
         ' --- Actions ---
-        Dim gAct = AddGroup("Flash duration and log file (shared by all phrases)", 424, 62)
-        AddLabel(gAct, "Flash duration (ms):", 12, 26, 125)
-        nudFlashMs = AddNud(gAct, 140, 24, 70, 50, 5000)
+        Dim gAct = AddGroup("Flash length and log file (shared by all phrases)", 424, 62)
+        AddLabel(gAct, "Flash length (ms):", 12, 26, 125)
+        nudFlashMs = AddNud(gAct, 140, 24, 70, 200, 10000)
         _editable.Add(nudFlashMs)
 
         AddLabel(gAct, "Log file:", 400, 26, 60)
