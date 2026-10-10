@@ -1,0 +1,7 @@
+bin/
+obj/
+.vs/
+*.user
+config.json
+# local example screenshot (contains third-party player names)
+image.png
