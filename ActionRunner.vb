@@ -13,13 +13,13 @@ Public Class ActionRunner
             Attempt("Flash", reportError, Sub() FlashOverlay.Flash(ParseColor(cfg.FlashColor), cfg.FlashDurationMs))
         End If
         If rule.Sound Then
-            Attempt("Sound", reportError, Sub() PlaySound(cfg.SoundFile))
+            Attempt("Sound", reportError, Sub() PlaySound(rule.SoundFile))
         End If
         If rule.Log Then
             Attempt("Log", reportError, Sub() WriteLog(cfg.LogFile, rule.Phrase, context))
         End If
         If rule.Run Then
-            Attempt("Run", reportError, Sub() RunCommand(cfg.CommandPath, cfg.CommandArgs, rule.Phrase))
+            Attempt("Run", reportError, Sub() RunCommand(rule.CommandPath, rule.CommandArgs, rule.Phrase))
         End If
     End Sub
 

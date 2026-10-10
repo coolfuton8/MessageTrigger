@@ -14,8 +14,8 @@ beyond an OCR-capable language pack (any normal Windows 10/11 install has one fo
    click-through green frame is left around the area (the frame sits *outside* the captured pixels, so it
    never ends up in the OCR).
 3. Add one or more **phrases**, and tick which actions each one triggers: Flash / Sound / Log / Run.
-4. Configure the actions (flash colour/duration, sound file, log file, program + arguments) and the
-   polling interval, then **Start watching**.
+   Select a phrase row to set *its own* sound file and program/arguments.
+4. Set the shared flash colour/duration and log file, plus the polling interval, then **Start watching**.
 
 ### Trigger behaviour
 
@@ -28,9 +28,9 @@ punctuation, which makes it tolerant of typical OCR spacing noise.
 | Action | What it does |
 |---|---|
 | Flash | Tints every monitor with the chosen colour for the configured duration (click-through). |
-| Sound | Plays the chosen `.wav`/`.mp3`/etc. file; system beep if blank. |
+| Sound | Plays the phrase's own `.wav`/`.mp3`/etc. file; system beep if blank. |
 | Log | Appends `timestamp \| phrase \| matched line` to the log file. |
-| Run | Starts the configured program/script. `{phrase}` and `{time}` in the arguments are substituted. Raw OCR text is deliberately never passed to the command line. |
+| Run | Starts the phrase's own program/script. `{phrase}` and `{time}` in the arguments are substituted. Raw OCR text is deliberately never passed to the command line. |
 
 ### Settings
 

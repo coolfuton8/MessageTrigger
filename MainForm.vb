@@ -19,6 +19,8 @@ Public Class MainForm
     Private grid As DataGridView
     Private btnColor As Button
     Private nudFlashMs As NumericUpDown
+    Private grpDetail As GroupBox
+    Private _loadingDetail As Boolean
     Private txtSound As TextBox
     Private txtLog As TextBox
     Private txtCommand As TextBox
@@ -34,7 +36,7 @@ Public Class MainForm
         MaximizeBox = False
         StartPosition = FormStartPosition.CenterScreen
         AutoScaleMode = AutoScaleMode.Dpi
-        ClientSize = New Size(760, 766)
+        ClientSize = New Size(760, 700)
 
         BuildUi()
 
@@ -71,9 +73,9 @@ Public Class MainForm
         _editable.AddRange({nudInterval, nudRearm, nudUpscale})
 
         ' --- Phrases ---
-        Dim gPhr = AddGroup("Phrases to look for (case / spacing / punctuation are ignored)", 128, 206)
+        Dim gPhr = AddGroup("Phrases to look for (case / spacing / punctuation are ignored)", 128, 262)
         grid = New DataGridView With {
-            .Left = 12, .Top = 22, .Width = 712, .Height = 150,
+            .Left = 12, .Top = 22, .Width = 712, .Height = 108,
             .AllowUserToResizeRows = False,
             .RowHeadersVisible = True,
             .AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
@@ -91,11 +93,32 @@ Public Class MainForm
                                                  e.Row.Cells(4).Value = False
                                              End Sub
         gPhr.Controls.Add(grid)
-        AddLabel(gPhr, "Type in the blank bottom row to add a phrase. Select a row and press Delete to remove it.", 12, 175, 700)
+        AddHandler grid.CurrentCellChanged, Sub(s As Object, e As EventArgs) LoadDetailFromSelection()
+        AddLabel(gPhr, "Type in the blank bottom row to add a phrase. Select a row and press Delete to remove it.", 12, 133, 700)
         _editable.Add(grid)
 
+        ' Per-phrase sound / program, edited for the selected row.
+        grpDetail = New GroupBox With {.Text = "Sound and program for the selected phrase", .Left = 12, .Top = 156, .Width = 712, .Height = 98}
+        gPhr.Controls.Add(grpDetail)
+        AddLabel(grpDetail, "Sound file:", 12, 24, 90)
+        txtSound = AddText(grpDetail, 105, 22, 430)
+        AddButton(grpDetail, "Browse...", 545, 20, 70, Sub(s, e) BrowseOpen(txtSound, "Audio|*.wav;*.mp3;*.wma;*.m4a|All files|*.*"))
+        AddButton(grpDetail, "Test", 622, 20, 70, Sub(s, e) TestAction(Sub() ActionRunner.PlaySound(txtSound.Text)))
+        AddLabel(grpDetail, "Run program:", 12, 52, 90)
+        txtCommand = AddText(grpDetail, 105, 50, 430)
+        AddButton(grpDetail, "Browse...", 545, 48, 70, Sub(s, e) BrowseOpen(txtCommand, "Programs / scripts|*.exe;*.bat;*.cmd;*.ps1;*.vbs;*.py|All files|*.*"))
+        AddButton(grpDetail, "Test", 622, 48, 70, Sub(s, e) TestAction(Sub() ActionRunner.RunCommand(txtCommand.Text, txtArgs.Text, "(test)")))
+        AddLabel(grpDetail, "Arguments:", 12, 76, 90)
+        txtArgs = AddText(grpDetail, 105, 74, 430)
+        AddLabel(grpDetail, "{phrase} and {time} are substituted", 545, 77, 165)
+        For Each tb In {txtSound, txtCommand, txtArgs}
+            AddHandler tb.TextChanged, Sub(s As Object, e As EventArgs) StoreDetailToSelection()
+        Next
+        grpDetail.Enabled = False
+        _editable.Add(grpDetail)
+
         ' --- Actions ---
-        Dim gAct = AddGroup("Actions", 340, 190)
+        Dim gAct = AddGroup("Flash and log (shared by all phrases)", 396, 62)
         AddLabel(gAct, "Flash colour:", 12, 26, 90)
         btnColor = AddButton(gAct, "", 105, 22, 60, AddressOf OnPickColor)
         AddLabel(gAct, "Duration (ms):", 190, 26, 100)
@@ -103,36 +126,22 @@ Public Class MainForm
         AddButton(gAct, "Test flash", 385, 22, 100, Sub(s, e) FlashOverlay.Flash(btnColor.BackColor, CInt(nudFlashMs.Value)))
         _editable.AddRange({btnColor, nudFlashMs})
 
-        AddLabel(gAct, "Sound file:", 12, 60, 90)
-        txtSound = AddText(gAct, 105, 58, 440)
-        AddButton(gAct, "Browse...", 555, 56, 80, Sub(s, e) BrowseOpen(txtSound, "Audio|*.wav;*.mp3;*.wma;*.m4a|All files|*.*"))
-        AddButton(gAct, "Test", 642, 56, 70, Sub(s, e) TestAction(Sub() ActionRunner.PlaySound(txtSound.Text)))
-        AddLabel(gAct, "(blank = system beep)", 105, 82, 300)
-
-        AddLabel(gAct, "Log file:", 12, 108, 90)
-        txtLog = AddText(gAct, 105, 106, 440)
-        AddButton(gAct, "Browse...", 555, 104, 80, Sub(s, e) BrowseSave(txtLog, "Text / log|*.txt;*.log|All files|*.*"))
-        AddButton(gAct, "Test", 642, 104, 70, Sub(s, e) TestAction(Sub() ActionRunner.WriteLog(txtLog.Text, "(test)", "Test entry from MessageTrigger")))
-
-        AddLabel(gAct, "Run program:", 12, 140, 90)
-        txtCommand = AddText(gAct, 105, 138, 440)
-        AddButton(gAct, "Browse...", 555, 136, 80, Sub(s, e) BrowseOpen(txtCommand, "Programs / scripts|*.exe;*.bat;*.cmd;*.ps1;*.vbs;*.py|All files|*.*"))
-        AddButton(gAct, "Test", 642, 136, 70, Sub(s, e) TestAction(Sub() ActionRunner.RunCommand(txtCommand.Text, txtArgs.Text, "(test)")))
-        AddLabel(gAct, "Arguments:", 12, 166, 90)
-        txtArgs = AddText(gAct, 105, 164, 440)
-        AddLabel(gAct, "{phrase} and {time} are substituted", 552, 168, 180)
-        _editable.AddRange({txtSound, txtLog, txtCommand, txtArgs})
+        AddLabel(gAct, "Log file:", 400, 26, 60)
+        txtLog = AddText(gAct, 462, 24, 160)
+        AddButton(gAct, "...", 628, 22, 36, Sub(s, e) BrowseSave(txtLog, "Text / log|*.txt;*.log|All files|*.*"))
+        AddButton(gAct, "Test", 670, 22, 56, Sub(s, e) TestAction(Sub() ActionRunner.WriteLog(txtLog.Text, "(test)", "Test entry from MessageTrigger")))
+        _editable.Add(txtLog)
 
         ' --- Control row ---
-        btnStart = AddButton(Me, "Start watching", 20, 542, 140, AddressOf OnStartStop)
+        btnStart = AddButton(Me, "Start watching", 20, 470, 140, AddressOf OnStartStop)
         btnStart.Height = 34
-        Dim btnSave = AddButton(Me, "Save settings", 170, 542, 120, Sub(s, e) SaveConfig(showStatus:=True))
+        Dim btnSave = AddButton(Me, "Save settings", 170, 470, 120, Sub(s, e) SaveConfig(showStatus:=True))
         btnSave.Height = 34
-        lblStatus = AddLabel(Me, "", 305, 551, 440)
+        lblStatus = AddLabel(Me, "", 305, 479, 440)
         lblStatus.AutoEllipsis = True
 
         ' --- Last OCR output ---
-        Dim gOcr = AddGroup("Last OCR result", 586, 172)
+        Dim gOcr = AddGroup("Last OCR result", 514, 172)
         txtOcr = New TextBox With {
             .Multiline = True, .ReadOnly = True, .ScrollBars = ScrollBars.Vertical,
             .Left = 12, .Top = 22, .Width = 712, .Height = 140
@@ -181,15 +190,55 @@ Public Class MainForm
         nudUpscale.Value = _cfg.UpscaleFactor
         btnColor.BackColor = ActionRunner.ParseColor(_cfg.FlashColor)
         nudFlashMs.Value = _cfg.FlashDurationMs
-        txtSound.Text = _cfg.SoundFile
         txtLog.Text = _cfg.LogFile
-        txtCommand.Text = _cfg.CommandPath
-        txtArgs.Text = _cfg.CommandArgs
 
         grid.Rows.Clear()
         For Each r In _cfg.Phrases
-            grid.Rows.Add(r.Phrase, r.Flash, r.Sound, r.Log, r.Run)
+            Dim idx As Integer = grid.Rows.Add(r.Phrase, r.Flash, r.Sound, r.Log, r.Run)
+            grid.Rows(idx).Tag = New PhraseRule With {.SoundFile = r.SoundFile, .CommandPath = r.CommandPath, .CommandArgs = r.CommandArgs}
         Next
+        LoadDetailFromSelection()
+    End Sub
+
+    ''' <summary>Per-phrase sound/program settings live on each grid row's Tag.</summary>
+    Private Shared Function DetailOf(row As DataGridViewRow) As PhraseRule
+        Dim r = TryCast(row.Tag, PhraseRule)
+        If r Is Nothing Then
+            r = New PhraseRule()
+            row.Tag = r
+        End If
+        Return r
+    End Function
+
+    Private Sub LoadDetailFromSelection()
+        Dim row As DataGridViewRow = grid.CurrentRow
+        _loadingDetail = True
+        Try
+            If row Is Nothing OrElse row.IsNewRow Then
+                grpDetail.Enabled = False
+                txtSound.Text = ""
+                txtCommand.Text = ""
+                txtArgs.Text = ""
+            Else
+                Dim d = DetailOf(row)
+                grpDetail.Enabled = Not _watcher.IsRunning
+                txtSound.Text = d.SoundFile
+                txtCommand.Text = d.CommandPath
+                txtArgs.Text = d.CommandArgs
+            End If
+        Finally
+            _loadingDetail = False
+        End Try
+    End Sub
+
+    Private Sub StoreDetailToSelection()
+        If _loadingDetail Then Return
+        Dim row As DataGridViewRow = grid.CurrentRow
+        If row Is Nothing OrElse row.IsNewRow Then Return
+        Dim d = DetailOf(row)
+        d.SoundFile = txtSound.Text.Trim()
+        d.CommandPath = txtCommand.Text.Trim()
+        d.CommandArgs = txtArgs.Text
     End Sub
 
     Private Sub ReadUiToConfig()
@@ -199,22 +248,23 @@ Public Class MainForm
         _cfg.UpscaleFactor = CInt(nudUpscale.Value)
         _cfg.FlashColor = ColorTranslator.ToHtml(btnColor.BackColor)
         _cfg.FlashDurationMs = CInt(nudFlashMs.Value)
-        _cfg.SoundFile = txtSound.Text.Trim()
         _cfg.LogFile = txtLog.Text.Trim()
-        _cfg.CommandPath = txtCommand.Text.Trim()
-        _cfg.CommandArgs = txtArgs.Text
 
         _cfg.Phrases = New List(Of PhraseRule)()
         For Each row As DataGridViewRow In grid.Rows
             If row.IsNewRow Then Continue For
             Dim phrase As String = Convert.ToString(row.Cells(0).Value)
             If String.IsNullOrWhiteSpace(phrase) Then Continue For
+            Dim d = DetailOf(row)
             _cfg.Phrases.Add(New PhraseRule With {
                 .Phrase = phrase.Trim(),
                 .Flash = CellChecked(row, 1),
                 .Sound = CellChecked(row, 2),
                 .Log = CellChecked(row, 3),
-                .Run = CellChecked(row, 4)
+                .Run = CellChecked(row, 4),
+                .SoundFile = d.SoundFile,
+                .CommandPath = d.CommandPath,
+                .CommandArgs = d.CommandArgs
             })
         Next
     End Sub
@@ -324,6 +374,7 @@ Public Class MainForm
         For Each c In _editable
             c.Enabled = enabled
         Next
+        If enabled Then LoadDetailFromSelection() ' re-enables the detail box only if a real row is selected
     End Sub
 
     Private Sub UpdateRegionLabel()

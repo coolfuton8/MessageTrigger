@@ -8,6 +8,9 @@ Public Class PhraseRule
     Public Property Sound As Boolean = True
     Public Property Log As Boolean = True
     Public Property Run As Boolean = False
+    Public Property SoundFile As String = ""
+    Public Property CommandPath As String = ""
+    Public Property CommandArgs As String = ""
 End Class
 
 ''' <summary>All persisted settings. Stored as config.json next to the executable.</summary>
@@ -26,10 +29,7 @@ Public Class AppConfig
     Public Property FlashColor As String = "#FF0000"
     Public Property FlashDurationMs As Integer = 400
 
-    Public Property SoundFile As String = ""
     Public Property LogFile As String = ""
-    Public Property CommandPath As String = ""
-    Public Property CommandArgs As String = ""
 
     Public Property Phrases As List(Of PhraseRule) = New List(Of PhraseRule)()
 
@@ -80,10 +80,14 @@ Public Class AppConfig
         FlashDurationMs = Math.Clamp(FlashDurationMs, 50, 5000)
         If RegionWidth < 1 OrElse RegionHeight < 1 Then HasRegion = False
         If Phrases Is Nothing Then Phrases = New List(Of PhraseRule)()
-        If SoundFile Is Nothing Then SoundFile = ""
         If LogFile Is Nothing Then LogFile = ""
-        If CommandPath Is Nothing Then CommandPath = ""
-        If CommandArgs Is Nothing Then CommandArgs = ""
+        Phrases.RemoveAll(Function(p) p Is Nothing)
+        For Each p In Phrases
+            If p.Phrase Is Nothing Then p.Phrase = ""
+            If p.SoundFile Is Nothing Then p.SoundFile = ""
+            If p.CommandPath Is Nothing Then p.CommandPath = ""
+            If p.CommandArgs Is Nothing Then p.CommandArgs = ""
+        Next
     End Sub
 
 End Class
