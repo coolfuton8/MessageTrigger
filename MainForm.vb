@@ -36,7 +36,7 @@ Public Class MainForm
         MaximizeBox = False
         StartPosition = FormStartPosition.CenterScreen
         AutoScaleMode = AutoScaleMode.Dpi
-        ClientSize = New Size(760, 728)
+        ClientSize = New Size(760, 700)
 
         BuildUi()
 
@@ -73,7 +73,7 @@ Public Class MainForm
         _editable.AddRange({nudInterval, nudRearm, nudUpscale})
 
         ' --- Phrases ---
-        Dim gPhr = AddGroup("Phrases to look for (case / spacing / punctuation are ignored)", 128, 290)
+        Dim gPhr = AddGroup("Phrases to look for (case / spacing / punctuation are ignored)", 128, 306)
         grid = New DataGridView With {
             .Left = 12, .Top = 22, .Width = 712, .Height = 108,
             .AllowUserToResizeRows = False,
@@ -98,7 +98,7 @@ Public Class MainForm
         _editable.Add(grid)
 
         ' Per-phrase sound / program, edited for the selected row.
-        grpDetail = New GroupBox With {.Text = "Settings for the selected phrase", .Left = 12, .Top = 156, .Width = 712, .Height = 126}
+        grpDetail = New GroupBox With {.Text = "Settings for the selected phrase", .Left = 12, .Top = 156, .Width = 712, .Height = 142}
         gPhr.Controls.Add(grpDetail)
         AddLabel(grpDetail, "Sound file:", 12, 24, 90)
         txtSound = AddText(grpDetail, 105, 22, 430)
@@ -110,10 +110,10 @@ Public Class MainForm
         AddButton(grpDetail, "Test", 622, 48, 70, Sub(s, e) TestAction(Sub() ActionRunner.RunCommand(txtCommand.Text, txtArgs.Text, "(test)")))
         AddLabel(grpDetail, "Arguments:", 12, 76, 90)
         txtArgs = AddText(grpDetail, 105, 74, 430)
-        AddLabel(grpDetail, "{phrase} and {time} are substituted", 545, 77, 165)
-        AddLabel(grpDetail, "Flash colour:", 12, 104, 90)
-        btnColor = AddButton(grpDetail, "", 105, 100, 60, AddressOf OnPickColor)
-        AddButton(grpDetail, "Test flash", 175, 100, 90, Sub(s, e) FlashOverlay.Flash(btnColor.BackColor, CInt(nudFlashMs.Value)))
+        AddLabel(grpDetail, "{phrase} and {time} are substituted in the arguments", 545, 80, 160).Height = 34
+        AddLabel(grpDetail, "Flash colour:", 12, 106, 90)
+        btnColor = AddButton(grpDetail, "", 105, 102, 60, AddressOf OnPickColor)
+        AddButton(grpDetail, "Test flash", 175, 102, 90, Sub(s, e) FlashOverlay.Flash(btnColor.BackColor, CInt(nudFlashMs.Value)))
         For Each tb In {txtSound, txtCommand, txtArgs}
             AddHandler tb.TextChanged, Sub(s As Object, e As EventArgs) StoreDetailToSelection()
         Next
@@ -121,7 +121,7 @@ Public Class MainForm
         _editable.Add(grpDetail)
 
         ' --- Actions ---
-        Dim gAct = AddGroup("Flash length and log file (shared by all phrases)", 424, 62)
+        Dim gAct = AddGroup("Flash length and log file (shared by all phrases)", 440, 62)
         AddLabel(gAct, "Flash length (ms):", 12, 26, 125)
         nudFlashMs = AddNud(gAct, 140, 24, 70, 200, 10000)
         _editable.Add(nudFlashMs)
@@ -133,18 +133,18 @@ Public Class MainForm
         _editable.Add(txtLog)
 
         ' --- Control row ---
-        btnStart = AddButton(Me, "Start watching", 20, 498, 140, AddressOf OnStartStop)
+        btnStart = AddButton(Me, "Start watching", 20, 514, 140, AddressOf OnStartStop)
         btnStart.Height = 34
-        Dim btnSave = AddButton(Me, "Save settings", 170, 498, 120, Sub(s, e) SaveConfig(showStatus:=True))
+        Dim btnSave = AddButton(Me, "Save settings", 170, 514, 120, Sub(s, e) SaveConfig(showStatus:=True))
         btnSave.Height = 34
-        lblStatus = AddLabel(Me, "", 305, 507, 440)
+        lblStatus = AddLabel(Me, "", 305, 523, 440)
         lblStatus.AutoEllipsis = True
 
         ' --- Last OCR output ---
-        Dim gOcr = AddGroup("Last OCR result", 542, 172)
+        Dim gOcr = AddGroup("Last OCR result", 558, 130)
         txtOcr = New TextBox With {
             .Multiline = True, .ReadOnly = True, .ScrollBars = ScrollBars.Vertical,
-            .Left = 12, .Top = 22, .Width = 712, .Height = 140
+            .Left = 12, .Top = 22, .Width = 712, .Height = 98
         }
         gOcr.Controls.Add(txtOcr)
     End Sub
