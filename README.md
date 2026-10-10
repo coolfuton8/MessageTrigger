@@ -9,6 +9,16 @@ beyond an OCR-capable language pack (any normal Windows 10/11 install has one fo
 
 > Full build, run and configuration details: [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
 
+## Install
+
+Download [`installer/MessageTrigger-Setup-1.0.0.exe`](installer/MessageTrigger-Setup-1.0.0.exe) and run it.
+It installs per-user (no admin rights needed) to `%LOCALAPPDATA%\Programs\MessageTrigger`, adds a Start Menu
+entry (optional desktop shortcut) and an uninstaller. The build is self-contained, so no separate .NET
+runtime is required. Your `config.json` is kept on uninstall.
+
+To rebuild the installer, install [Inno Setup 6](https://jrsoftware.org/isinfo.php)
+(`winget install JRSoftware.InnoSetup`) and run `installeruild-installer.ps1`.
+
 ## Usage
 
 1. `dotnet run` (or build and start `MessageTrigger.exe`). Requires the .NET 8 SDK/runtime on Windows 10 1809+.

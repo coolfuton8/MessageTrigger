@@ -45,6 +45,18 @@ dotnet publish -c Release -o publish
 Copy the resulting `publish` folder anywhere; run `MessageTrigger.exe` from it. The target machine needs the
 .NET 8 Desktop Runtime.
 
+### Installer
+
+`installer/MessageTrigger-Setup-1.0.0.exe` is a ready-made installer: per-user (no admin rights), self-contained
+(no .NET runtime needed), with a Start Menu entry, optional desktop shortcut and an uninstaller. Settings live in
+`config.json` inside the install folder (`%LOCALAPPDATA%\Programs\MessageTrigger`) and are kept on uninstall.
+
+To rebuild it, install Inno Setup 6 (`winget install JRSoftware.InnoSetup`) and run:
+
+```bash
+powershell -File installeruild-installer.ps1
+```
+
 ### Visual Studio
 
 Open `MessageTrigger.vbproj` (File > Open > Project/Solution) in Visual Studio 2022 with the
