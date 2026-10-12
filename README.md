@@ -11,7 +11,7 @@ beyond an OCR-capable language pack (any normal Windows 10/11 install has one fo
 
 ## Install
 
-Download [`installer/MessageTrigger-Setup-1.0.0.exe`](installer/MessageTrigger-Setup-1.0.0.exe) and run it.
+Download [`installer/MessageTrigger-Setup-1.1.0.exe`](installer/MessageTrigger-Setup-1.1.0.exe) and run it.
 It installs per-user (no admin rights needed) to `%LOCALAPPDATA%\Programs\MessageTrigger`, adds a Start Menu
 entry (optional desktop shortcut) and an uninstaller. The build is self-contained, so no separate .NET
 runtime is required. Your `config.json` is kept on uninstall.

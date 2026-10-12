@@ -47,7 +47,7 @@ Copy the resulting `publish` folder anywhere; run `MessageTrigger.exe` from it. 
 
 ### Installer
 
-`installer/MessageTrigger-Setup-1.0.0.exe` is a ready-made installer: per-user (no admin rights), self-contained
+`installer/MessageTrigger-Setup-1.1.0.exe` is a ready-made installer: per-user (no admin rights), self-contained
 (no .NET runtime needed), with a Start Menu entry, optional desktop shortcut and an uninstaller. Settings live in
 `config.json` inside the install folder (`%LOCALAPPDATA%\Programs\MessageTrigger`) and are kept on uninstall.
 

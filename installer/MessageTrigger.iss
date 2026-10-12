@@ -2,7 +2,7 @@
 ; Build with installer\build-installer.ps1 (publishes the app, then runs ISCC).
 
 #define AppName "MessageTrigger"
-#define AppVersion "1.0.0"
+#define AppVersion "1.1.0"
 #define AppExe "MessageTrigger.exe"
 
 [Setup]
