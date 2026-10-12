@@ -50,6 +50,10 @@ punctuation, which makes it tolerant of typical OCR spacing noise.
 Everything is saved to `config.json` next to the executable and loaded on startup (also saved when you
 start watching, press **Save settings**, or close the window).
 
+Changes made while watching apply live (the next scan uses them) and are saved automatically. The bar at the
+top of the window shows whether the app is polling: green and pulsing with a scan counter while watching,
+grey when not, red if it had to stop.
+
 ## Notes
 
 - The capture area must be visible on screen (not covered by other windows). Games should run in

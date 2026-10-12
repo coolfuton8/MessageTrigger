@@ -4,6 +4,7 @@ Imports System.Threading
 ''' Polls the capture region, OCRs it, and raises <see cref="Triggered"/> per phrase.
 ''' A phrase fires once, then must be absent for N consecutive polls before it can fire again.
 ''' All events are raised on the thread that called <see cref="Start"/> (the UI thread).
+''' The config object passed to Start is read on every poll, so changes to it apply live.
 ''' </summary>
 Public Class ScreenWatcher
 
@@ -15,9 +16,16 @@ Public Class ScreenWatcher
     Public Event TextRead(text As String)
     Public Event Triggered(rule As PhraseRule, context As String)
     Public Event ErrorOccurred(message As String)
-    Public Event Stopped()
+
+    ''' <summary>Raised after every poll attempt (successful or not): the "heartbeat".</summary>
+    Public Event PollCompleted(pollNumber As Integer)
+
+    ''' <summary>failure is Nothing for a normal stop, otherwise why watching had to stop.</summary>
+    Public Event Stopped(failure As String)
 
     Private _cts As CancellationTokenSource
+    Private _delayCts As CancellationTokenSource
+    Private _pollCount As Integer
     Private ReadOnly _state As New Dictionary(Of String, PhraseState)
 
     Public ReadOnly Property IsRunning As Boolean
@@ -26,9 +34,20 @@ Public Class ScreenWatcher
         End Get
     End Property
 
+    ''' <summary>While true the loop keeps running but skips capture (e.g. during region selection).</summary>
+    Public Property Paused As Boolean
+
+    Public ReadOnly Property PollCount As Integer
+        Get
+            Return _pollCount
+        End Get
+    End Property
+
     Public Sub Start(cfg As AppConfig)
         If IsRunning Then Return
         _state.Clear()
+        _pollCount = 0
+        Paused = False
         _cts = New CancellationTokenSource()
         Dim ignored As Task = RunAsync(cfg, _cts.Token)
     End Sub
@@ -37,43 +56,61 @@ Public Class ScreenWatcher
         If _cts IsNot Nothing Then _cts.Cancel()
     End Sub
 
+    ''' <summary>Cuts the current wait short so the next poll happens now (used when the interval changes).</summary>
+    Public Sub Nudge()
+        Try
+            If _delayCts IsNot Nothing Then _delayCts.Cancel()
+        Catch ex As ObjectDisposedException
+        End Try
+    End Sub
+
     Private Async Function RunAsync(cfg As AppConfig, ct As CancellationToken) As Task
         Dim ocr As ScreenOcr
         Try
             ocr = New ScreenOcr()
         Catch ex As Exception
             RaiseEvent ErrorOccurred(ex.Message)
-            Finish()
+            Finish(ex.Message)
             Return
         End Try
 
         Do While Not ct.IsCancellationRequested
-            Try
-                Dim text As String
-                Using bmp As Bitmap = ScreenOcr.Capture(cfg.Region)
-                    text = Await ocr.RecognizeAsync(bmp, cfg.UpscaleFactor)
-                End Using
-                If ct.IsCancellationRequested Then Exit Do
-                RaiseEvent TextRead(text)
-                Evaluate(cfg, text)
-            Catch ex As Exception
-                RaiseEvent ErrorOccurred(ex.Message)
-            End Try
+            If Not Paused Then
+                Try
+                    Dim text As String
+                    Using bmp As Bitmap = ScreenOcr.Capture(cfg.Region)
+                        text = Await ocr.RecognizeAsync(bmp, cfg.UpscaleFactor)
+                    End Using
+                    If ct.IsCancellationRequested Then Exit Do
+                    RaiseEvent TextRead(text)
+                    Evaluate(cfg, text)
+                Catch ex As Exception
+                    RaiseEvent ErrorOccurred(ex.Message)
+                End Try
+                _pollCount += 1
+                RaiseEvent PollCompleted(_pollCount)
+            End If
 
-            Try
-                Await Task.Delay(cfg.PollIntervalMs, ct)
-            Catch ex As TaskCanceledException
-                Exit Do
-            End Try
+            Using linked As CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(ct)
+                _delayCts = linked
+                Try
+                    Await Task.Delay(If(Paused, 200, Math.Max(100, cfg.PollIntervalMs)), linked.Token)
+                Catch ex As TaskCanceledException
+                    If ct.IsCancellationRequested Then Exit Do
+                    ' otherwise nudged: fall through and poll right away
+                Finally
+                    _delayCts = Nothing
+                End Try
+            End Using
         Loop
 
-        Finish()
+        Finish(Nothing)
     End Function
 
-    Private Sub Finish()
+    Private Sub Finish(failure As String)
         _cts?.Dispose()
         _cts = Nothing
-        RaiseEvent Stopped()
+        RaiseEvent Stopped(failure)
     End Sub
 
     Private Sub Evaluate(cfg As AppConfig, text As String)

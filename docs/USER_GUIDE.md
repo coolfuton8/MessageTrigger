@@ -91,6 +91,12 @@ The region is saved immediately after you select it. If your windows move, re-se
 
 ### 4.2 Polling / OCR
 
+**Every setting applies immediately**, including while watching: edit the interval, re-arm count, upscale,
+phrases, per-phrase settings, flash length, log file or region and the running watcher picks the change up on
+its next scan (a new interval takes effect straight away). Changes are written to `config.json` about half a
+second after you stop editing, so there is nothing to "apply". Editing a phrase's text makes it a new phrase,
+so it starts armed.
+
 | Setting | Range / default | Description |
 |---|---|---|
 | **Poll interval (ms)** | 100–60000 / 1000 | Delay between the end of one OCR pass and the start of the next. |
@@ -147,11 +153,21 @@ Log lines look like:
 
 ### 4.5 Buttons and status
 
+The coloured bar across the top of the window always shows whether the app is polling:
+
+| Bar | Meaning |
+|---|---|
+| Green, `WATCHING - scan #N - last scan HH:mm:ss - every N ms` | Polling. The bar brightens on every scan and the counter and time advance, so a frozen bar means a problem. The window title also shows `[WATCHING]`. |
+| Amber, `WATCHING - last scan FAILED: ...` | Still polling, but the latest capture or OCR pass failed (e.g. the screen is locked). It recovers by itself. |
+| Blue, `PAUSED while you select a region` | Polling is paused for the few seconds the region picker is open. |
+| Grey, `NOT WATCHING` | Not polling. |
+| Red, `STOPPED - <reason>` | Watching had to stop, e.g. no Windows OCR language pack is installed. |
+
 | Control | Description |
 |---|---|
-| **Start / Stop watching** | Starts or stops the polling loop. Starting requires a region and at least one phrase. While watching, the settings are locked. |
-| **Start watching when the app opens** | When ticked, polling starts automatically as soon as the window appears, using the saved region and phrases. If there is no region or no phrase, auto-start is skipped and the status line says why. Locked while watching. |
-| **Save settings** | Writes `config.json` now. Settings are also saved when you press Start, after selecting a region, and when you close the window while not watching. |
+| **Start / Stop watching** | Starts or stops the polling loop. Starting requires a region and at least one phrase. Settings stay editable while watching. Starting resets the re-arm state, so a phrase already on screen will trigger again. |
+| **Start watching when the app opens** | When ticked, polling starts automatically as soon as the window appears, using the saved region and phrases. If there is no region or no phrase, auto-start is skipped and the status line says why. Saved like every other setting. |
+| **Save settings** | Writes `config.json` right now. Settings are also saved automatically shortly after each change and when you close the window. |
 | **Status line** | Shows the latest event: triggers, errors, saves. |
 | **Last OCR result** | The raw text from the most recent pass - useful for choosing phrases and checking how well the region reads. |
 

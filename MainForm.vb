@@ -1,15 +1,30 @@
 Imports System.IO
-Imports System.ComponentModel
 
 ''' <summary>Setup + control screen. Built in code (no designer file) to keep the project small.</summary>
 Public Class MainForm
     Inherits Form
+
+    Private Const BaseTitle As String = "MessageTrigger - screen OCR phrase watcher"
+    Private Const BannerHeight As Integer = 32
 
     Private _cfg As AppConfig
     Private ReadOnly _watcher As New ScreenWatcher()
     Private ReadOnly _frame As New FrameOverlay()
     Private _frameVisible As Boolean = True
 
+    ' Settings are applied to the running watcher immediately; the file is written after a short quiet period.
+    Private ReadOnly _saveTimer As New System.Windows.Forms.Timer With {.Interval = 600}
+    Private ReadOnly _pulseTimer As New System.Windows.Forms.Timer With {.Interval = 250}
+    Private _suspendLive As Boolean
+
+    Private _stopReason As String
+    Private _lastPassFailed As Boolean
+    Private _lastFailure As String = ""
+    Private _lastPollTime As DateTime
+    Private _pulsing As Boolean
+
+    Private pnlBanner As Panel
+    Private lblBanner As Label
     Private lblRegion As Label
     Private btnSelect As Button
     Private btnFrame As Button
@@ -29,10 +44,9 @@ Public Class MainForm
     Private btnStart As Button
     Private lblStatus As Label
     Private txtOcr As TextBox
-    Private ReadOnly _editable As New List(Of Control)
 
     Public Sub New()
-        Text = "MessageTrigger - screen OCR phrase watcher"
+        Text = BaseTitle
         FormBorderStyle = FormBorderStyle.FixedSingle
         MaximizeBox = False
         StartPosition = FormStartPosition.CenterScreen
@@ -43,35 +57,53 @@ Public Class MainForm
 
         AddHandler _watcher.TextRead, AddressOf OnTextRead
         AddHandler _watcher.Triggered, AddressOf OnTriggered
-        AddHandler _watcher.ErrorOccurred, Sub(msg As String) SetStatus("Error: " & msg)
+        AddHandler _watcher.ErrorOccurred, AddressOf OnWatcherError
+        AddHandler _watcher.PollCompleted, AddressOf OnPollCompleted
         AddHandler _watcher.Stopped, AddressOf OnWatcherStopped
+        AddHandler _saveTimer.Tick, AddressOf OnSaveTimerTick
+        AddHandler _pulseTimer.Tick, Sub(s As Object, e As EventArgs)
+                                         _pulseTimer.Stop()
+                                         _pulsing = False
+                                         UpdateBanner()
+                                     End Sub
 
         _cfg = AppConfig.Load()
         ApplyConfigToUi()
         UpdateRegionLabel()
         If _cfg.HasRegion Then _frame.ShowAround(_cfg.Region)
+        UpdateBanner()
         SetStatus(If(File.Exists(AppConfig.ConfigPath), "Loaded settings from " & AppConfig.ConfigPath, "No saved settings yet - defaults loaded."))
     End Sub
 
 #Region "UI construction"
 
     Private Sub BuildUi()
+        ' --- Always-visible watching indicator ---
+        pnlBanner = New Panel With {.Left = 0, .Top = 0, .Width = 760, .Height = BannerHeight}
+        lblBanner = New Label With {
+            .Dock = DockStyle.Fill, .TextAlign = ContentAlignment.MiddleLeft, .AutoEllipsis = True,
+            .Font = New Font("Segoe UI", 11.0F, FontStyle.Bold), .Padding = New Padding(12, 0, 0, 0)
+        }
+        pnlBanner.Controls.Add(lblBanner)
+        Controls.Add(pnlBanner)
+
         ' --- Capture region ---
         Dim gRegion = AddGroup("Capture region", 8, 54)
         lblRegion = AddLabel(gRegion, "", 12, 22, 410)
         btnSelect = AddButton(gRegion, "Select region...", 430, 18, 140, AddressOf OnSelectRegion)
         btnFrame = AddButton(gRegion, "Hide frame", 580, 18, 140, AddressOf OnToggleFrame)
-        _editable.Add(btnSelect)
 
         ' --- Polling ---
-        Dim gPoll = AddGroup("Polling / OCR", 68, 54)
+        Dim gPoll = AddGroup("Polling / OCR (changes apply immediately)", 68, 54)
         AddLabel(gPoll, "Poll interval (ms):", 12, 22, 120)
         nudInterval = AddNud(gPoll, 135, 20, 80, 100, 60000)
         AddLabel(gPoll, "Re-arm after absent polls:", 240, 22, 160)
         nudRearm = AddNud(gPoll, 405, 20, 60, 1, 1000)
         AddLabel(gPoll, "Upscale (x):", 500, 22, 80)
         nudUpscale = AddNud(gPoll, 585, 20, 50, 1, 4)
-        _editable.AddRange({nudInterval, nudRearm, nudUpscale})
+        For Each n In {nudInterval, nudRearm, nudUpscale}
+            AddHandler n.ValueChanged, Sub(s As Object, e As EventArgs) OnSettingChanged()
+        Next
 
         ' --- Phrases ---
         Dim gPhr = AddGroup("Phrases to look for (case / spacing / punctuation are ignored)", 128, 306)
@@ -95,8 +127,15 @@ Public Class MainForm
                                              End Sub
         gPhr.Controls.Add(grid)
         AddHandler grid.CurrentCellChanged, Sub(s As Object, e As EventArgs) LoadDetailFromSelection()
+        ' Commit a ticked checkbox straight away so it applies live instead of on focus change.
+        AddHandler grid.CurrentCellDirtyStateChanged, Sub(s As Object, e As EventArgs)
+                                                          If grid.IsCurrentCellDirty AndAlso TypeOf grid.CurrentCell Is DataGridViewCheckBoxCell Then
+                                                              grid.CommitEdit(DataGridViewDataErrorContexts.Commit)
+                                                          End If
+                                                      End Sub
+        AddHandler grid.CellValueChanged, Sub(s As Object, e As DataGridViewCellEventArgs) OnSettingChanged()
+        AddHandler grid.UserDeletedRow, Sub(s As Object, e As DataGridViewRowEventArgs) OnSettingChanged()
         AddLabel(gPhr, "Type in the blank bottom row to add a phrase. Select a row and press Delete to remove it.", 12, 133, 700)
-        _editable.Add(grid)
 
         ' Per-phrase sound / program, edited for the selected row.
         grpDetail = New GroupBox With {.Text = "Settings for the selected phrase", .Left = 12, .Top = 156, .Width = 712, .Height = 142}
@@ -116,46 +155,48 @@ Public Class MainForm
         btnColor = AddButton(grpDetail, "", 105, 102, 60, AddressOf OnPickColor)
         AddButton(grpDetail, "Test flash", 175, 102, 90, Sub(s, e) FlashOverlay.Flash(btnColor.BackColor, CInt(nudFlashMs.Value)))
         For Each tb In {txtSound, txtCommand, txtArgs}
-            AddHandler tb.TextChanged, Sub(s As Object, e As EventArgs) StoreDetailToSelection()
+            AddHandler tb.TextChanged, Sub(s As Object, e As EventArgs)
+                                           StoreDetailToSelection()
+                                           OnSettingChanged()
+                                       End Sub
         Next
         grpDetail.Enabled = False
-        _editable.Add(grpDetail)
 
         ' --- Actions ---
         Dim gAct = AddGroup("Flash length and log file (shared by all phrases)", 440, 62)
         AddLabel(gAct, "Flash length (ms):", 12, 26, 125)
         nudFlashMs = AddNud(gAct, 140, 24, 70, 200, 10000)
-        _editable.Add(nudFlashMs)
+        AddHandler nudFlashMs.ValueChanged, Sub(s As Object, e As EventArgs) OnSettingChanged()
 
         AddLabel(gAct, "Log file:", 235, 26, 55)
         txtLog = AddText(gAct, 292, 24, 190)
+        AddHandler txtLog.TextChanged, Sub(s As Object, e As EventArgs) OnSettingChanged()
         AddButton(gAct, "...", 488, 22, 36, Sub(s, e) BrowseSave(txtLog, "Text / log|*.txt;*.log|All files|*.*"))
         AddButton(gAct, "Test", 530, 22, 56, Sub(s, e) TestAction(Sub() ActionRunner.WriteLog(txtLog.Text, "(test)", "Test entry from MessageTrigger")))
         AddButton(gAct, "Edit", 592, 22, 56, AddressOf OnEditLog)
-        _editable.Add(txtLog)
 
         ' --- Control row ---
-        btnStart = AddButton(Me, "Start watching", 20, 514, 140, AddressOf OnStartStop)
+        btnStart = AddButton(Me, "Start watching", 20, 514 + BannerHeight, 140, AddressOf OnStartStop)
         btnStart.Height = 34
-        Dim btnSave = AddButton(Me, "Save settings", 170, 514, 120, Sub(s, e) SaveConfig(showStatus:=True))
+        Dim btnSave = AddButton(Me, "Save settings", 170, 514 + BannerHeight, 120, Sub(s, e) SaveConfig(showStatus:=True))
         btnSave.Height = 34
-        chkAutoStart = New CheckBox With {.Text = "Start watching when the app opens", .Left = 305, .Top = 521, .Width = 270, .Height = 22}
+        chkAutoStart = New CheckBox With {.Text = "Start watching when the app opens", .Left = 305, .Top = 521 + BannerHeight, .Width = 270, .Height = 22}
+        AddHandler chkAutoStart.CheckedChanged, Sub(s As Object, e As EventArgs) OnSettingChanged()
         Controls.Add(chkAutoStart)
-        _editable.Add(chkAutoStart)
-        lblStatus = AddLabel(Me, "", 20, 553, 725)
+        lblStatus = AddLabel(Me, "", 20, 553 + BannerHeight, 725)
         lblStatus.AutoEllipsis = True
 
         ' --- Last OCR output ---
-        Dim gOcr = AddGroup("Last OCR result", 576, 112)
+        Dim gOcr = AddGroup("Last OCR result", 576, 88)
         txtOcr = New TextBox With {
             .Multiline = True, .ReadOnly = True, .ScrollBars = ScrollBars.Vertical,
-            .Left = 12, .Top = 22, .Width = 712, .Height = 80
+            .Left = 12, .Top = 20, .Width = 712, .Height = 60
         }
         gOcr.Controls.Add(txtOcr)
     End Sub
 
     Private Function AddGroup(title As String, top As Integer, height As Integer) As GroupBox
-        Dim g As New GroupBox With {.Text = title, .Left = 12, .Top = top, .Width = 736, .Height = height}
+        Dim g As New GroupBox With {.Text = title, .Left = 12, .Top = top + BannerHeight, .Width = 736, .Height = height}
         Controls.Add(g)
         Return g
     End Function
@@ -190,18 +231,23 @@ Public Class MainForm
 #Region "Config <-> UI"
 
     Private Sub ApplyConfigToUi()
-        nudInterval.Value = _cfg.PollIntervalMs
-        nudRearm.Value = _cfg.RearmAfterAbsentPolls
-        nudUpscale.Value = _cfg.UpscaleFactor
-        nudFlashMs.Value = _cfg.FlashDurationMs
-        txtLog.Text = _cfg.LogFile
-        chkAutoStart.Checked = _cfg.StartWatchingOnStartup
+        _suspendLive = True
+        Try
+            nudInterval.Value = _cfg.PollIntervalMs
+            nudRearm.Value = _cfg.RearmAfterAbsentPolls
+            nudUpscale.Value = _cfg.UpscaleFactor
+            nudFlashMs.Value = _cfg.FlashDurationMs
+            txtLog.Text = _cfg.LogFile
+            chkAutoStart.Checked = _cfg.StartWatchingOnStartup
 
-        grid.Rows.Clear()
-        For Each r In _cfg.Phrases
-            Dim idx As Integer = grid.Rows.Add(r.Phrase, r.Flash, r.Sound, r.Log, r.Run)
-            grid.Rows(idx).Tag = New PhraseRule With {.SoundFile = r.SoundFile, .CommandPath = r.CommandPath, .CommandArgs = r.CommandArgs, .FlashColor = r.FlashColor}
-        Next
+            grid.Rows.Clear()
+            For Each r In _cfg.Phrases
+                Dim idx As Integer = grid.Rows.Add(r.Phrase, r.Flash, r.Sound, r.Log, r.Run)
+                grid.Rows(idx).Tag = New PhraseRule With {.SoundFile = r.SoundFile, .CommandPath = r.CommandPath, .CommandArgs = r.CommandArgs, .FlashColor = r.FlashColor}
+            Next
+        Finally
+            _suspendLive = False
+        End Try
         LoadDetailFromSelection()
     End Sub
 
@@ -227,7 +273,7 @@ Public Class MainForm
                 btnColor.BackColor = Color.Red
             Else
                 Dim d = DetailOf(row)
-                grpDetail.Enabled = Not _watcher.IsRunning
+                grpDetail.Enabled = True
                 txtSound.Text = d.SoundFile
                 txtCommand.Text = d.CommandPath
                 txtArgs.Text = d.CommandArgs
@@ -249,8 +295,9 @@ Public Class MainForm
         d.FlashColor = ColorTranslator.ToHtml(btnColor.BackColor)
     End Sub
 
-    Private Sub ReadUiToConfig()
-        grid.EndEdit()
+    ' commitEdit:=False leaves a half-typed grid cell alone (used for live/background updates).
+    Private Sub ReadUiToConfig(Optional commitEdit As Boolean = True)
+        If commitEdit Then grid.EndEdit()
         _cfg.PollIntervalMs = CInt(nudInterval.Value)
         _cfg.RearmAfterAbsentPolls = CInt(nudRearm.Value)
         _cfg.UpscaleFactor = CInt(nudUpscale.Value)
@@ -258,13 +305,13 @@ Public Class MainForm
         _cfg.LogFile = txtLog.Text.Trim()
         _cfg.StartWatchingOnStartup = chkAutoStart.Checked
 
-        _cfg.Phrases = New List(Of PhraseRule)()
+        Dim phrases As New List(Of PhraseRule)()
         For Each row As DataGridViewRow In grid.Rows
             If row.IsNewRow Then Continue For
             Dim phrase As String = Convert.ToString(row.Cells(0).Value)
             If String.IsNullOrWhiteSpace(phrase) Then Continue For
             Dim d = DetailOf(row)
-            _cfg.Phrases.Add(New PhraseRule With {
+            phrases.Add(New PhraseRule With {
                 .Phrase = phrase.Trim(),
                 .Flash = CellChecked(row, 1),
                 .Sound = CellChecked(row, 2),
@@ -276,6 +323,7 @@ Public Class MainForm
                 .FlashColor = d.FlashColor
             })
         Next
+        _cfg.Phrases = phrases ' replaced as a whole so the running watcher never sees a half-built list
     End Sub
 
     Private Shared Function CellChecked(row As DataGridViewRow, index As Integer) As Boolean
@@ -283,9 +331,9 @@ Public Class MainForm
         Return v IsNot Nothing AndAlso Convert.ToBoolean(v)
     End Function
 
-    Private Sub SaveConfig(showStatus As Boolean)
+    Private Sub SaveConfig(showStatus As Boolean, Optional commitEdit As Boolean = True)
         Try
-            ReadUiToConfig()
+            ReadUiToConfig(commitEdit)
             _cfg.Save()
             If showStatus Then SetStatus("Settings saved to " & AppConfig.ConfigPath)
         Catch ex As Exception
@@ -293,11 +341,31 @@ Public Class MainForm
         End Try
     End Sub
 
+    ''' <summary>Any setting edited: push it into the live config now, persist shortly after.</summary>
+    Private Sub OnSettingChanged()
+        If _suspendLive OrElse _cfg Is Nothing Then Return
+        Dim oldInterval As Integer = _cfg.PollIntervalMs
+        ReadUiToConfig(commitEdit:=False)
+        If _watcher.IsRunning AndAlso _cfg.PollIntervalMs <> oldInterval Then _watcher.Nudge()
+        If _watcher.IsRunning Then UpdateBanner()
+        _saveTimer.Stop()
+        _saveTimer.Start()
+    End Sub
+
+    Private Sub OnSaveTimerTick(sender As Object, e As EventArgs)
+        _saveTimer.Stop()
+        SaveConfig(showStatus:=False, commitEdit:=False)
+        If _watcher.IsRunning Then SetStatus("Settings applied live and saved.")
+    End Sub
+
 #End Region
 
 #Region "Event handlers"
 
     Private Async Sub OnSelectRegion(sender As Object, e As EventArgs)
+        ' Keep the poll loop alive but stop it OCR'ing the dimmed selection screens.
+        _watcher.Paused = True
+        UpdateBanner()
         _frame.Hide()
         WindowState = FormWindowState.Minimized
         Await Task.Delay(250) ' let the window actually disappear before dimming the screens
@@ -309,9 +377,11 @@ Public Class MainForm
             _cfg.Region = picked.Value
             UpdateRegionLabel()
             SaveConfig(showStatus:=False)
-            SetStatus("Region set. Settings saved.")
+            SetStatus("Region set and applied. Settings saved.")
         End If
         If _cfg.HasRegion AndAlso _frameVisible Then _frame.ShowAround(_cfg.Region)
+        _watcher.Paused = False
+        UpdateBanner()
     End Sub
 
     Private Sub OnToggleFrame(sender As Object, e As EventArgs)
@@ -329,6 +399,7 @@ Public Class MainForm
             If dlg.ShowDialog(Me) = DialogResult.OK Then
                 btnColor.BackColor = dlg.Color
                 StoreDetailToSelection()
+                OnSettingChanged()
             End If
         End Using
     End Sub
@@ -361,19 +432,40 @@ Public Class MainForm
         End If
 
         SaveConfig(showStatus:=False)
-        SetEditable(False)
+        _stopReason = Nothing
+        _lastPassFailed = False
+        _lastPollTime = DateTime.MinValue
         btnStart.Text = "Stop watching"
-        SetStatus("Watching...")
+        SetStatus("Watching started.")
         _watcher.Start(_cfg)
+        UpdateBanner()
     End Sub
 
-    Private Sub OnWatcherStopped()
-        SetEditable(True)
+    Private Sub OnWatcherError(message As String)
+        _lastPassFailed = True
+        _lastFailure = message
+        SetStatus("Error: " & message)
+        UpdateBanner()
+    End Sub
+
+    Private Sub OnWatcherStopped(failure As String)
+        _stopReason = failure
         btnStart.Text = "Start watching"
-        SetStatus("Stopped.")
+        ' Keep the failure text visible rather than replacing it with a generic message.
+        SetStatus(If(failure Is Nothing, "Stopped.", "Stopped - " & failure))
+        UpdateBanner()
+    End Sub
+
+    Private Sub OnPollCompleted(pollNumber As Integer)
+        _lastPollTime = DateTime.Now
+        _pulsing = True
+        _pulseTimer.Stop()
+        _pulseTimer.Start()
+        UpdateBanner()
     End Sub
 
     Private Sub OnTextRead(text As String)
+        _lastPassFailed = False
         txtOcr.Text = text.Replace(vbLf, vbCrLf)
     End Sub
 
@@ -406,7 +498,9 @@ Public Class MainForm
     End Sub
 
     Protected Overrides Sub OnFormClosing(e As FormClosingEventArgs)
-        If Not _watcher.IsRunning Then SaveConfig(showStatus:=False)
+        _saveTimer.Stop()
+        _pulseTimer.Stop()
+        SaveConfig(showStatus:=False) ' live edits are always persisted, even while watching
         _watcher.Stop()
         _frame.Close()
         MyBase.OnFormClosing(e)
@@ -416,11 +510,42 @@ Public Class MainForm
 
 #Region "Helpers"
 
-    Private Sub SetEditable(enabled As Boolean)
-        For Each c In _editable
-            c.Enabled = enabled
-        Next
-        If enabled Then LoadDetailFromSelection() ' re-enables the detail box only if a real row is selected
+    ' The banner is the primary "is it running?" indicator: colour + text + a pulse on every scan.
+    Private Sub UpdateBanner()
+        Dim bg As Color
+        Dim msg As String
+        Dim dot As String = ChrW(&H25CF) & "  "
+        Dim square As String = ChrW(&H25A0) & "  "
+
+        If Not _watcher.IsRunning Then
+            If _stopReason Is Nothing Then
+                bg = Color.FromArgb(96, 96, 96)
+                msg = square & "NOT WATCHING  -  press Start watching to begin"
+            Else
+                bg = Color.FromArgb(176, 32, 32)
+                msg = square & "STOPPED  -  " & _stopReason
+            End If
+            Text = BaseTitle
+        ElseIf _watcher.Paused Then
+            bg = Color.FromArgb(60, 90, 170)
+            msg = dot & "PAUSED while you select a region"
+            Text = BaseTitle & "  [PAUSED]"
+        Else
+            Dim last As String = If(_lastPollTime = DateTime.MinValue, "scanning...", "last scan " & _lastPollTime.ToString("HH:mm:ss"))
+            If _lastPassFailed Then
+                bg = Color.FromArgb(190, 110, 0)
+                msg = dot & "WATCHING  -  last scan FAILED: " & _lastFailure
+            Else
+                bg = If(_pulsing, Color.FromArgb(76, 200, 96), Color.FromArgb(28, 120, 48))
+                msg = dot & $"WATCHING  -  scan #{_watcher.PollCount}  -  {last}  -  every {_cfg.PollIntervalMs} ms"
+            End If
+            Text = BaseTitle & "  [WATCHING]"
+        End If
+
+        pnlBanner.BackColor = bg
+        lblBanner.BackColor = bg
+        lblBanner.ForeColor = Color.White
+        lblBanner.Text = msg
     End Sub
 
     Private Sub UpdateRegionLabel()
